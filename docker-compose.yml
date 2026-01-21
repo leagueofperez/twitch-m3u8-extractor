@@ -1,13 +1,24 @@
 # docker-compose.yml
-version: '3.8'
+version: "3.8"
 
 services:
   twitch-extractor:
+    container_name: twitch-extractor
     build: .
     ports:
       - "5000:5000"
     volumes:
-      - .:/app               # Sincroniza código en tiempo real
+      # Sincroniza código en tiempo real
+      - .:/app
     environment:
-      - FLASK_DEBUG=1        # Solo en desarrollo
-    command: python app.py   # Usa el servidor de Flask (con recarga)
+      # Solo en desarrollo
+      - FLASK_DEBUG=0
+    # Usa el servidor de Flask (con recarga)
+    command: python app.py
+    networks:
+      - npm_network
+
+networks:
+  npm_network:
+    external:
+      name: npm_network
