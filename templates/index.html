@@ -1,65 +1,51 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Extractor de Streams de Twitch</title>
-    <!-- Tailwind CSS v3 desde CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Configuración personalizada de Tailwind -->
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              twitch: {
-                DEFAULT: '#6441A5',
-                dark: '#543988',
-                light: '#775AD8'
-              }
-            }
-          }
-        }
-      }
-    </script>
-    <style>
-      /* Opcional: mejorar fuente */
-      body {
-        font-family:
-          system-ui,
-          -apple-system,
-          sans-serif;
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Extractor de Streams de Twitch</title>
+  <!-- Tailwind CSS v4 desde CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <!-- Personalización v4: los colores van en @theme, no en tailwind.config -->
+  <style type="text/tailwindcss">
+    @theme {
+        --color-twitch: #6441a5;
+        --color-twitch-dark: #543988;
+        --color-twitch-light: #775ad8;
       }
     </style>
-  </head>
-  <body class="bg-gray-50 min-h-screen flex flex-col items-center py-8 px-4">
-    <div class="w-full max-w-2xl">
-      <h1 class="text-3xl font-bold text-center text-twitch mb-2">
-        Twitch Stream Extractor
-      </h1>
-      <p class="text-gray-600 text-center mb-6">
-        Extrae URLs de streams en vivo o VODs por calidad
-      </p>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
 
-      <div class="flex gap-2 mb-6">
-        <input
-          type="url"
-          id="twitchUrl"
-          placeholder="https://twitch.tv/nombre o https://twitch.tv/videos/12345"
-          class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-twitch focus:border-transparent outline-none"
-        />
-        <button
-          onclick="extract()"
-          class="px-4 py-2 bg-twitch hover:bg-twitch-dark text-white font-medium rounded-lg transition-colors duration-200 whitespace-nowrap"
-        >
-          Extraer
-        </button>
-      </div>
+<body class="bg-gray-50 min-h-screen flex flex-col items-center py-8 px-4">
+  <div class="w-full max-w-2xl">
+    <h1 class="text-3xl font-bold text-center text-twitch mb-2">
+      Twitch Stream Extractor
+    </h1>
+    <p class="text-gray-600 text-center mb-6">
+      Escribe el nombre del canal, su URL, o la de un VOD
+    </p>
 
-      <div id="result" class="mt-6"></div>
+    <div class="flex gap-2 mb-6">
+      <input type="text" id="twitchUrl" placeholder="admiralbulldog  ·  twitch.tv/canal  ·  twitch.tv/videos/12345"
+        autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go"
+        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-twitch focus:border-transparent focus:outline-none">
+      <button id="extractBtn" type="button"
+        class="px-4 py-2 bg-twitch hover:bg-twitch-dark text-white font-medium rounded-lg transition-colors duration-200 whitespace-nowrap">
+        Extraer
+      </button>
     </div>
 
-    <!-- Carga el script externo -->
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-  </body>
+    <div id="result" class="mt-6"></div>
+
+    <!-- Región de anuncios para lectores de pantalla (copiada fuera de #result
+           porque su contenido se reemplaza en cada extracción) -->
+    <p id="copyStatus" class="sr-only" aria-live="polite" role="status"></p>
+  </div>
+
+  <!-- Módulo ES: necesario para el import de icons.js -->
+  <script type="module" src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+
 </html>
