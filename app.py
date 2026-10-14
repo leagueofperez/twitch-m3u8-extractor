@@ -1,4 +1,5 @@
 # app.py
+import os
 import re
 
 from flask import Flask, jsonify, render_template, request
@@ -11,6 +12,24 @@ SENSITIVE = re.compile(
     r"(token|sig|nauth|nauthsig|client_id)=[^&\s\"']+", re.IGNORECASE
 )
 URL_RE = re.compile(r"https?://\S+")
+
+
+def site_url():
+    """Raíz absoluta del sitio para canonical, og:url, manifest y JSON-LD.
+
+    Prioriza PUBLIC_URL y si no está definida la deduce de la petición, de
+    forma que los meta tags son correctos sin configurar nada en local ni
+    detrás de un proxy. PUBLIC_URL conviene fijarla en producción: detrás
+    de un reverse proxy, url_root puede devolver el esquema o el host
+    interno en vez del público.
+    """
+    configured = (os.environ.get("PUBLIC_URL") or "").strip()
+    return (configured or request.url_root).rstrip("/")
+
+
+@app.context_processor
+def inject_site_url():
+    return {"site_url": site_url()}
 
 
 def sanitize_error(message):
