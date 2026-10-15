@@ -19,7 +19,10 @@ build:
 	docker build -t twitch-extractor .
 
 run: build
-	docker run -d --name twitch-app -p 5000:5000 twitch-extractor
+	-docker rm -f twitch-app
+	docker run -d --name twitch-app -p 5000:5000 \
+		$(if $(wildcard .env),--env-file .env,) \
+		twitch-extractor
 
 dev:
 	docker-compose up --build

@@ -4,7 +4,13 @@ import re
 
 from flask import Flask, jsonify, render_template, request
 
-from twitch_extractor import TwitchError, extract_streams_from_url
+import shortener
+from shortener import ShortenerError
+from twitch_extractor import (
+    TwitchError,
+    extract_streams_from_url,
+    parse_twitch_url,
+)
 
 app = Flask(__name__)
 
@@ -29,7 +35,7 @@ def site_url():
 
 @app.context_processor
 def inject_site_url():
-    return {"site_url": site_url()}
+    return {"site_url": site_url(), "shortener_enabled": shortener.is_enabled()}
 
 
 def sanitize_error(message):
@@ -50,7 +56,22 @@ def extract():
         if not url:
             return jsonify({"error": "URL vacía"}), 400
 
+        is_live, target = parse_twitch_url(url)
         stream_list = extract_streams_from_url(url)
+
+        # Cada URL viaja firmada junto a su slug y titulo. La firma es lo que
+        # permite a /shorten aceptar el enlace sin guardar nada en memoria: da
+        # igual en que worker caiga cada peticion porque no hay estado que
+        # compartir entre ellos.
+        if shortener.is_enabled():
+            for stream in stream_list:
+                quality = stream["quality"]
+                stream["shorten"] = shortener.issue(
+                    stream["url"],
+                    shortener.slug_for(is_live, target, quality),
+                    shortener.title_for(is_live, target, quality),
+                )
+
         return jsonify({"streams": stream_list})
 
     except TwitchError as exc:
@@ -58,6 +79,38 @@ def extract():
 
     except Exception as exc:
         app.logger.exception("Error no controlado en /extract")
+        return jsonify({"error": sanitize_error(f"{exc.__class__.__name__}: {exc}")}), 500
+
+
+@app.route("/shorten", methods=["POST"])
+def shorten():
+    if not shortener.is_enabled():
+        return jsonify({"error": "El acortado no está configurado en este servidor."}), 503
+
+    if shortener.rate_limited(request.remote_addr or "desconocida"):
+        return jsonify({"error": "Demasiadas peticiones. Espera un minuto."}), 429
+
+    try:
+        data = request.get_json(silent=True) or {}
+        url = (data.get("url") or "").strip()
+        if not url:
+            return jsonify({"error": "URL vacía"}), 400
+
+        return jsonify(
+            shortener.shorten(
+                url,
+                data.get("slug") or "",
+                data.get("title") or "",
+                data.get("ts"),
+                data.get("sig"),
+            )
+        )
+
+    except ShortenerError as exc:
+        return jsonify({"error": sanitize_error(str(exc))}), exc.status
+
+    except Exception as exc:
+        app.logger.exception("Error no controlado en /shorten")
         return jsonify({"error": sanitize_error(f"{exc.__class__.__name__}: {exc}")}), 500
 
 

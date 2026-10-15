@@ -8,6 +8,16 @@ services:
       - .:/app
     environment:
       FLASK_DEBUG: "1"  # Desarrollo: activa debug y recarga
+      # Docker Compose lee solo un .env de la raíz del proyecto (ver
+      # .env.example). El "${VAR:-}" deja la variable vacía si no está
+      # definida, y la app degrada bien con valor vacío:
+      #   - sin PUBLIC_URL los meta tags se deducen de la petición
+      #   - sin SHORT_IO_API_KEY y SHORT_IO_DOMAIN no se muestra el botón
+      #     de acortar y todo lo demás funciona igual
+      PUBLIC_URL: "${PUBLIC_URL:-}"
+      SHORT_IO_API_KEY: "${SHORT_IO_API_KEY:-}"
+      SHORT_IO_DOMAIN: "${SHORT_IO_DOMAIN:-}"
+      WORKERS: "${WORKERS:-4}"
     command: python app.py
     networks:
       - npm_network
