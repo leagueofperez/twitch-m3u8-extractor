@@ -1,9 +1,10 @@
 // static/script.js
-import { ICON_OPEN, ICON_COPY } from './icons.js'
+import { ICON_OPEN, ICON_COPY, ICON_LINK } from './icons.js'
 const COPY_FEEDBACK_MS = 1500
 
 const COPY_BASE_CLASSES = 'bg-gray-100 hover:bg-gray-200 text-gray-700'
 const COPY_OK_CLASSES = 'bg-green-600 text-white'
+const LINK_OK_CLASSES = 'bg-emerald-600 text-white'
 
 function escapeAttr(value) {
   return String(value)
@@ -71,10 +72,78 @@ function flashCopied(button) {
   }, COPY_FEEDBACK_MS)
 }
 
+function flashShortened(button, label) {
+  if (button.dataset.flashing === '1') return
+  button.dataset.flashing = '1'
+  button.classList.remove(...COPY_BASE_CLASSES.split(' '))
+  button.classList.add(...LINK_OK_CLASSES.split(' '))
+  button.title = 'Copiado'
+
+  window.setTimeout(() => {
+    button.dataset.flashing = '0'
+    button.classList.remove(...LINK_OK_CLASSES.split(' '))
+    button.classList.add(...COPY_BASE_CLASSES.split(' '))
+    button.title = `Acortar y copiar ${label}`
+  }, COPY_FEEDBACK_MS)
+}
+
+const ACTION_TEXT = {
+  created: 'creada',
+  updated: 'actualizada',
+  unchanged: 'sin cambios',
+}
+
+async function shortenAndCopy(button) {
+  const url = button.dataset.url
+  const quality = button.dataset.quality
+
+  button.disabled = true
+  try {
+    const res = await fetch('/shorten', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        slug: button.dataset.slug,
+        title: button.dataset.title,
+        ts: button.dataset.ts,
+        sig: button.dataset.sig,
+      }),
+    })
+    const data = await res.json()
+
+    if (data.error) {
+      announce(`No se pudo acortar: ${data.error}`)
+      return
+    }
+
+    const copied = await copyText(data.shortUrl)
+    if (copied) {
+      flashShortened(button, quality)
+      announce(
+        `URL corta ${ACTION_TEXT[data.action] || ''}: ${data.shortUrl}, copiada.`,
+      )
+    } else {
+      announce(
+        `URL corta ${ACTION_TEXT[data.action] || ''}: ${data.shortUrl}. No se pudo copiar.`,
+      )
+    }
+  } catch (err) {
+    console.error(err)
+    announce('No se pudo contactar con el servidor para acortar.')
+  } finally {
+    button.disabled = false
+  }
+}
+
 async function extract() {
   const urlInput = document.getElementById('twitchUrl')
   const resultDiv = document.getElementById('result')
   const url = urlInput.value.trim()
+
+  // El servidor indica si short.io está configurado. Sin clave, el botón de
+  // acortar ni se renderiza y la app funciona igual que antes.
+  const shortenerEnabled = resultDiv.dataset.shortener === '1'
 
   if (!url) {
     announce('Introduce un canal, un ID de VOD o una URL de Twitch.')
@@ -126,6 +195,25 @@ async function extract() {
     for (const stream of data.streams) {
       const safeUrl = escapeAttr(stream.url)
       const label = escapeAttr(stream.quality)
+      // Firma que /shorten comprueba antes de tocar short.io. Viaja en la
+      // respuesta de /extract y se reenvía tal cual, sin interpretarla.
+      const s = stream.shorten || {}
+      const linkButton = shortenerEnabled
+        ? `
+              <button
+                type="button"
+                data-action="shorten"
+                data-url="${safeUrl}"
+                data-quality="${label}"
+                data-slug="${escapeAttr(s.slug || '')}"
+                data-title="${escapeAttr(s.title || '')}"
+                data-ts="${escapeAttr(s.ts ?? '')}"
+                data-sig="${escapeAttr(s.sig || '')}"
+                title="Acortar y copiar"
+                aria-label="Acortar la URL de ${label} y copiarla"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xl transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-twitch focus-visible:ring-offset-2"
+              >${ICON_LINK}</button>`
+        : ''
 
       html += `
         <tr class="hover:bg-gray-50">
@@ -142,12 +230,13 @@ async function extract() {
               >${ICON_OPEN}</a>
               <button
                 type="button"
+                data-action="copy"
                 data-url="${safeUrl}"
                 data-quality="${label}"
                 title="Copiar URL de ${label}"
                 aria-label="Copiar la URL de ${label}"
                 class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-xl transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-twitch focus-visible:ring-offset-2 ${COPY_BASE_CLASSES}"
-              >${ICON_COPY}</button>
+              >${ICON_COPY}</button>${linkButton}
             </div>
           </td>
         </tr>
@@ -190,11 +279,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const resultDiv = document.getElementById('result')
   if (resultDiv) {
     resultDiv.addEventListener('click', async (e) => {
-      const button = e.target.closest('button[data-url]')
+      const button = e.target.closest('button[data-action]')
       if (!button) return
 
       const url = button.dataset.url
       const quality = button.dataset.quality
+
+      if (button.dataset.action === 'shorten') {
+        await shortenAndCopy(button)
+        return
+      }
 
       const copied = await copyText(url)
       if (copied) {
