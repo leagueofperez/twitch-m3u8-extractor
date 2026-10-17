@@ -4,6 +4,7 @@ import {
   copyText,
   flashCopied,
   flashShortened,
+  showToast,
 } from './clipboard.js'
 import { renderEmpty, renderError, renderStreams } from './render.js'
 
@@ -20,24 +21,25 @@ async function shortenAndCopy(button) {
   try {
     const data = await shortenStream(button)
     if (data.error) {
-      announce(`No se pudo acortar: ${data.error}`)
+      showToast(`No se pudo acortar: ${data.error}`, 'error')
       return
     }
 
     const copied = await copyText(data.shortUrl)
     if (copied) {
       flashShortened(button, quality)
-      announce(
+      showToast(
         `URL corta ${ACTION_TEXT[data.action] || ''}: ${data.shortUrl}, copiada.`,
       )
     } else {
-      announce(
+      showToast(
         `URL corta ${ACTION_TEXT[data.action] || ''}: ${data.shortUrl}. No se pudo copiar.`,
+        'error',
       )
     }
   } catch (err) {
     console.error(err)
-    announce('No se pudo contactar con el servidor para acortar.')
+    showToast('No se pudo contactar con el servidor para acortar.', 'error')
   } finally {
     button.disabled = false
   }
@@ -53,7 +55,8 @@ async function extract() {
     return
   }
 
-  result.innerHTML = '<p class="text-gray-500">Obteniendo calidades...</p>'
+  result.innerHTML =
+    '<p class="text-gray-500 dark:text-gray-400">Obteniendo calidades...</p>'
 
   try {
     const data = await extractStreams(url)
@@ -87,10 +90,11 @@ function handleResultClick(event) {
   copyText(button.dataset.url).then((copied) => {
     if (copied) {
       flashCopied(button)
-      announce(`URL de ${quality} copiada al portapapeles.`)
+      showToast(`URL de ${quality} copiada al portapapeles.`)
     } else {
-      announce(
+      showToast(
         `No se pudo copiar la URL de ${quality}. Abre el stream y cópiala manualmente.`,
+        'error',
       )
     }
   })

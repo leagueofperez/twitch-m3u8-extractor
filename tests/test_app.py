@@ -23,10 +23,18 @@ class AppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'<form id="extractForm" method="post"', response.data)
+        self.assertIn(b'id="toastMessage"', response.data)
+        self.assertIn(b'id="toastDismiss"', response.data)
         self.assertNotIn(b"Requiere JavaScript", response.data)
         self.assertNotIn(b"cdn.jsdelivr.net", response.data)
+        self.assertIn(b'<meta name="color-scheme" content="light dark">', response.data)
+        self.assertIn(b'media="(prefers-color-scheme: dark)"', response.data)
+        self.assertIn(b"dark:bg-gray-950", response.data)
         css_response = self.client.get("/static/tailwind.generated.css")
         self.assertEqual(css_response.status_code, 200)
+        css = css_response.get_data()
+        self.assertIn(b"prefers-color-scheme:dark", css)
+        self.assertIn(b"dark\\:bg-gray-950", css)
         css_response.close()
 
     @patch("services.extraction.extract_streams_for_target", return_value=STREAMS)
@@ -38,6 +46,7 @@ class AppTests(unittest.TestCase):
         self.assertIn(b"Calidades disponibles", response.data)
         self.assertIn(b"720p60", response.data)
         self.assertIn(b"master.m3u8?token=secret", response.data)
+        self.assertIn(b"dark:bg-gray-900", response.data)
         parse_url.assert_called_once_with("twitch.tv/channel")
         extract.assert_called_once_with(True, "channel")
 

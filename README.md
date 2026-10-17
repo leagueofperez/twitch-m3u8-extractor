@@ -78,11 +78,15 @@ debug. La configuración `docker-compose.yml` sigue reservada para desarrollo.
 ### Opción D — Local, sin Docker
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python app.py     # http://localhost:5000
+./tools/run-local.sh     # http://localhost:5000
 ```
+
+El script reutiliza el primer entorno existente que encuentre en `.venv`,
+`venv`, `.virtualenv`, `virtualenv`, `env` o `ENV`; si no existe ninguno, crea
+`.venv`. Después instala las dependencias Python, carga las variables de `.env`
+si el archivo está presente y arranca la app. También puedes ejecutarlo desde
+otro directorio. El `.env` debe ser un archivo compatible con Bash; usa
+`.env.example` como plantilla.
 
 En producción se usa Gunicorn en vez del servidor de desarrollo:
 
@@ -116,6 +120,11 @@ npm run build:css
 
 Las versiones del compilador están fijadas en `package-lock.json`. Node solo es
 necesario para reconstruir el CSS, no para ejecutar el contenedor.
+
+El tema oscuro se activa automáticamente cuando el sistema operativo o el
+navegador prefiere el modo oscuro. No requiere JavaScript, selector ni
+preferencia guardada; se aplican variantes `dark:` de Tailwind al formulario,
+resultados, controles y mensajes, manteniendo el morado de Twitch como acento.
 
 `make ps` distingue los dos nombres de contenedor que genera el proyecto —`twitch-app`
 (`make run`) y `twitch-extractor` (`make dev`)— e indica cuál de los dos lo arrancó:
@@ -173,10 +182,11 @@ repositorio. Si no defines nada, todas las variables quedan vacías y la app
 funciona igual: los meta tags se deducen de la petición y el botón de acortar no
 aparece.
 
-**El `.env` se usa en las tres formas de arrancar.** Compose lo carga para
-sustituir las variables `${...}` tanto en desarrollo como en producción;
-`make run` usa `docker run`, que no carga el fichero por sí solo, así que el
-Makefile lo pasa explícitamente con `--env-file`:
+**El `.env` se usa en las tres formas de arrancar.** El script local lo carga
+antes de iniciar Flask; Compose lo carga para sustituir las variables `${...}`
+tanto en desarrollo como en producción. `make run` usa `docker run`, que no
+carga el fichero por sí solo, así que el Makefile lo pasa explícitamente con
+`--env-file`:
 
 ```makefile
 run: build

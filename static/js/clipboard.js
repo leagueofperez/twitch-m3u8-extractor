@@ -2,6 +2,8 @@ const COPY_FEEDBACK_MS = 1500
 const COPY_BASE_CLASSES = 'bg-gray-100 hover:bg-gray-200 text-gray-700'
 const COPY_OK_CLASSES = 'bg-green-600 text-white'
 const LINK_OK_CLASSES = 'bg-emerald-600 text-white'
+const TOAST_DURATION_MS = 5000
+let toastTimer
 
 export function announce(message) {
   const status = document.getElementById('copyStatus')
@@ -10,6 +12,27 @@ export function announce(message) {
   window.setTimeout(() => {
     status.textContent = message
   }, 50)
+}
+
+export function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast')
+  const toastMessage = document.getElementById('toastMessage')
+  if (!toast || !toastMessage) return
+
+  window.clearTimeout(toastTimer)
+  toastMessage.textContent = message
+  toast.setAttribute('role', type === 'error' ? 'alert' : 'status')
+  toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite')
+  toast.classList.remove('hidden', 'bg-green-700', 'dark:bg-green-800', 'bg-red-700', 'dark:bg-red-900')
+  toast.classList.add(
+    ...(type === 'error'
+      ? ['bg-red-700', 'dark:bg-red-900']
+      : ['bg-green-700', 'dark:bg-green-800']),
+  )
+
+  toastTimer = window.setTimeout(() => {
+    toast.classList.add('hidden')
+  }, TOAST_DURATION_MS)
 }
 
 export async function copyText(text) {
@@ -71,3 +94,8 @@ export function flashCopied(button) {
 export function flashShortened(button, label) {
   flashButton(button, LINK_OK_CLASSES, `Acortar y copiar ${label}`)
 }
+
+document.getElementById('toastDismiss')?.addEventListener('click', () => {
+  window.clearTimeout(toastTimer)
+  document.getElementById('toast')?.classList.add('hidden')
+})
