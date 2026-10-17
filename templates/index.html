@@ -2,6 +2,7 @@
 <html lang="es">
 
 <head>
+  {% set site_root = site_url ~ '/' %}
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Extractor de Streams de Twitch</title>
@@ -9,7 +10,7 @@
     content="Pega el nombre de un canal, su URL o la de un VOD y obtén las URLs m3u8 de cada calidad, listas para abrir en cualquier reproductor.">
   <meta name="theme-color" content="#6441a5">
   <meta name="color-scheme" content="light">
-  <link rel="canonical" href="{{ site_url }}/">
+  <link rel="canonical" href="{{ site_root }}">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
@@ -18,8 +19,8 @@
   <meta property="og:title" content="Extractor de Streams de Twitch">
   <meta property="og:description"
     content="Obtén las URLs m3u8 de streams de Twitch en vivo y VODs por calidad.">
-  <meta property="og:url" content="{{ site_url }}/">
-  <meta property="og:image" content="{{ site_url }}/static/og-image.png">
+  <meta property="og:url" content="{{ site_root }}">
+  <meta property="og:image" content="{{ site_root }}static/og-image.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -30,7 +31,7 @@
   <meta name="twitter:title" content="Extractor de Streams de Twitch">
   <meta name="twitter:description"
     content="Obtén las URLs m3u8 de streams de Twitch en vivo y VODs por calidad.">
-  <meta name="twitter:image" content="{{ site_url }}/static/og-image.png">
+  <meta name="twitter:image" content="{{ site_root }}static/og-image.png">
 
   <!-- Iconos. Todos se regeneran con `make icons` desde assets/icon.svg -->
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
@@ -42,16 +43,7 @@
   <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
   <link rel="robots" href="{{ url_for('static', filename='robots.txt') }}">
 
-  <!-- Tailwind CSS v4 desde CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-  <!-- Personalización v4: los colores van en @theme, no en tailwind.config -->
-  <style type="text/tailwindcss">
-    @theme {
-        --color-twitch: #6441a5;
-        --color-twitch-dark: #543988;
-        --color-twitch-light: #775ad8;
-      }
-    </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='tailwind.generated.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 
   <!-- Datos estructurados. site_url se interpola sin comillas de por medio:
@@ -61,13 +53,13 @@
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "Twitch Stream Extractor",
-    "url": "{{ site_url }}/",
+    "url": {{ site_root|tojson }},
     "description": "Extrae URLs m3u8 de streams de Twitch en vivo y VODs por calidad.",
     "applicationCategory": "MultimediaApplication",
     "operatingSystem": "Any",
-    "browserRequirements": "Requiere JavaScript",
+    "browserRequirements": "JavaScript opcional para mejoras de interacción",
     "inLanguage": "es",
-    "image": "{{ site_url }}/static/og-image.png",
+    "image": {{ (site_root ~ 'static/og-image.png')|tojson }},
     "offers": {
       "@type": "Offer",
       "price": "0",
@@ -86,17 +78,62 @@
       Escribe el nombre del canal, su URL, o la de un VOD
     </p>
 
-    <div class="flex gap-2 mb-6">
-      <input type="text" id="twitchUrl" placeholder="admiralbulldog  ·  twitch.tv/canal  ·  twitch.tv/videos/12345"
+    <form id="extractForm" method="post" action="{{ url_for('pages.index') }}" class="flex gap-2 mb-6">
+      <input type="text" id="twitchUrl" name="url" value="{{ input_url|default('') }}"
+        placeholder="admiralbulldog  ·  twitch.tv/canal  ·  twitch.tv/videos/12345"
         autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go"
         class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-twitch focus:border-transparent focus:outline-none">
-      <button id="extractBtn" type="button"
+      <button id="extractBtn" type="submit"
         class="px-4 py-2 bg-twitch hover:bg-twitch-dark text-white font-medium rounded-lg transition-colors duration-200 whitespace-nowrap">
         Extraer
       </button>
-    </div>
+    </form>
 
-    <div id="result" class="mt-6" data-shortener="{{ '1' if shortener_enabled else '0' }}"></div>
+    <div id="result" class="mt-6" data-shortener="{{ '1' if shortener_enabled else '0' }}" aria-live="polite">
+      {% if error %}
+      <div class="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">
+        ❌ Error: {{ error }}
+      </div>
+      {% elif streams %}
+      <h3 class="text-xl font-semibold text-gray-800 mb-3">Calidades disponibles</h3>
+      <div class="overflow-x-auto rounded-lg border border-gray-200">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Calidad</th>
+              <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            {% for stream in streams %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-3 text-sm font-mono text-gray-800 text-center">{{ stream.quality }}</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-center gap-2">
+                  <a href="{{ stream.url }}" target="_blank" rel="noopener noreferrer"
+                    title="Abrir en reproductor" aria-label="Abrir {{ stream.quality }} en una pestaña nueva"
+                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-twitch text-white text-xl transition-colors duration-150 hover:bg-twitch-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-twitch focus-visible:ring-offset-2"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg></a>
+                  <button type="button" data-action="copy" data-url="{{ stream.url }}"
+                    data-quality="{{ stream.quality }}" title="Copiar URL de {{ stream.quality }}"
+                    aria-label="Copiar la URL de {{ stream.quality }}"
+                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-xl transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-twitch focus-visible:ring-offset-2 bg-gray-100 hover:bg-gray-200 text-gray-700"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg></button>
+                  {% if shortener_enabled and stream.shorten %}
+                  <button type="button" data-action="shorten" data-url="{{ stream.url }}"
+                    data-quality="{{ stream.quality }}" data-slug="{{ stream.shorten.slug }}"
+                    data-title="{{ stream.shorten.title }}" data-ts="{{ stream.shorten.ts }}"
+                    data-sig="{{ stream.shorten.sig }}" title="Acortar y copiar"
+                    aria-label="Acortar la URL de {{ stream.quality }} y copiarla"
+                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xl transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-twitch focus-visible:ring-offset-2"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg></button>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
 
     <!-- Región de anuncios para lectores de pantalla (copiada fuera de #result
            porque su contenido se reemplaza en cada extracción) -->

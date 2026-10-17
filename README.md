@@ -5,7 +5,8 @@ calidad, listas para abrir en cualquier reproductor compatible con HLS.
 
 Pega el nombre del canal, su URL o la de un VOD, y obtienes una tabla con una URL
 por calidad (`1080p60`, `720p60`, …, `audio_only`) con botones para abrirla en una
-pestaña nueva o copiarla al portapapeles.
+pestaña nueva o copiarla al portapapeles. El formulario también funciona sin
+JavaScript; JavaScript solo añade la actualización asíncrona de resultados.
 
 > Las URLs que devuelve son **tokens efímeros**: cambian en cada llamada y caducan
 > a los pocos minutos. Es el comportamiento de Twitch, no un fallo. Lo normal es
@@ -19,6 +20,7 @@ pestaña nueva o copiarla al portapapeles.
 - [Arranque rápido](#arranque-rápido)
 - [Configuración](#configuración)
 - [Despliegue](#despliegue)
+- [CSS del frontend](#css-del-frontend)
 - [Generación de assets](#generación-de-assets)
 - [API](#api)
 - [Estructura del proyecto](#estructura-del-proyecto)
@@ -62,7 +64,18 @@ Abre <http://localhost:5000>.
 make dev          # docker-compose up --build
 ```
 
-### Opción C — Local, sin Docker
+### Opción C — Docker Compose en producción
+
+```bash
+cp .env.example .env
+# Edita PUBLIC_URL y las credenciales opcionales antes de desplegar.
+docker compose -f docker-compose.production.yml up --build -d
+```
+
+Esta configuración usa Gunicorn, no monta el árbol de trabajo y no habilita
+debug. La configuración `docker-compose.yml` sigue reservada para desarrollo.
+
+### Opción D — Local, sin Docker
 
 ```bash
 python3 -m venv .venv
@@ -86,7 +99,23 @@ gunicorn --bind 0.0.0.0:5000 --workers 4 app:app
 | `make stop`  | Para **los dos** contenedores posibles          |
 | `make clean` | Elimina contenedores e imagen                   |
 | `make icons` | Regenera los iconos desde `assets/*.svg`        |
+| `make test`  | Ejecuta las pruebas unitarias                   |
 | `make help`  | Lista los comandos                              |
+
+### CSS del frontend
+
+Tailwind se compila a un archivo estático servido por Flask; el navegador ya no
+necesita ejecutar Tailwind desde un CDN para aplicar estilos. El CSS generado se
+commitea y se incluye en la imagen de producción. Si cambias clases del template
+o `static/js/`, regenera el archivo:
+
+```bash
+npm ci
+npm run build:css
+```
+
+Las versiones del compilador están fijadas en `package-lock.json`. Node solo es
+necesario para reconstruir el CSS, no para ejecutar el contenedor.
 
 `make ps` distingue los dos nombres de contenedor que genera el proyecto —`twitch-app`
 (`make run`) y `twitch-extractor` (`make dev`)— e indica cuál de los dos lo arrancó:
@@ -126,6 +155,8 @@ Todo se controla por variables de entorno. Ninguna es obligatoria.
 | `PUBLIC_URL`       | se deduce de la petición | Raíz absoluta del sitio para `canonical`, `og:url`, `manifest` y JSON-LD                                          |
 | `PORT`             | `5000`                   | Puerto de escucha (lo usa `entrypoint.sh`)                                                                        |
 | `WORKERS`          | `4`                      | Nº de workers de gunicorn. Cada uno es un proceso con memoria propia                                              |
+| `MAX_CONTENT_LENGTH` | `16384` bytes           | Tamaño máximo del cuerpo HTTP; los excesos reciben `413`                                                         |
+| `FLASK_DEBUG`      | desactivado               | Activa debug solo para desarrollo local o Compose de desarrollo                                                  |
 | `SHORT_IO_API_KEY` | —                        | Clave secreta de [short.io](https://app.short.io/settings/integrations/api-key). Sin ella no hay botón de acortar |
 | `SHORT_IO_DOMAIN`  | —                        | Dominio propio para los enlaces cortos, p. ej. `links.midominio.com`                                              |
 
@@ -142,9 +173,10 @@ repositorio. Si no defines nada, todas las variables quedan vacías y la app
 funciona igual: los meta tags se deducen de la petición y el botón de acortar no
 aparece.
 
-**El `.env` lo leen las dos formas de arrancar.** `make dev` usa `docker compose`,
-que lo carga por su cuenta; `make run` usa `docker run`, que lo ignora salvo que
-se le pase `--env-file`. Por eso `make run` lo incluye explícitamente:
+**El `.env` se usa en las tres formas de arrancar.** Compose lo carga para
+sustituir las variables `${...}` tanto en desarrollo como en producción;
+`make run` usa `docker run`, que no carga el fichero por sí solo, así que el
+Makefile lo pasa explícitamente con `--env-file`:
 
 ```makefile
 run: build
@@ -325,22 +357,30 @@ desarrollo, no para producción.
   docker network create npm_network
   ```
 
+Para producción, usa `docker-compose.production.yml`, que no hereda esos ajustes
+de desarrollo y arranca el entrypoint de Gunicorn. El `.dockerignore` excluye
+`.env`, `.venv`, `.git` y archivos locales del contexto que recibe Docker.
+
 ### Detrás de un reverse proxy
 
 Sirve la app por HTTP y deja el TLS en el proxy (Caddy, nginx, Traefik…).
 
-1. Exporta `PUBLIC_URL` con el dominio público y esquema `https`.
-2. Si el proxy no reenvía cabeceras de protocolo, **fíjalo también** en la app con
-   `ProxyFix`:
+1. Fija `PUBLIC_URL` con el dominio público y esquema `https`; así canonical,
+   Open Graph y JSON-LD no dependen de cabeceras reenviadas.
+2. La aplicación no confía automáticamente en `X-Forwarded-*`. Si necesitas
+   que Flask use esos valores, configura `ProxyFix` solo con el número exacto de
+   proxies de confianza:
 
    ```python
    from werkzeug.middleware.proxy_fix import ProxyFix
    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
    ```
 
-3. `POST /extract` no necesita CSRF ni cookies: es un endpoint público de solo
-   lectura. Aun así, si lo expones a internet, pon un límite de peticiones
-   (nginx `limit_req` o similar): cada extracción consume cuota con Twitch.
+   No habilites cabeceras reenviadas desde clientes que puedan alcanzar Flask
+   directamente.
+3. `POST /extract` no necesita cookies: es un endpoint público de solo lectura.
+   Si lo expones a internet, configura también un límite de peticiones en el
+   proxy, ya que cada extracción consume cuota con Twitch.
 
 ---
 
@@ -468,15 +508,33 @@ Dos matices sobre las URLs y la lista:
 
 Los errores nunca incluyen el token de reproducción de Twitch.
 
+El formulario HTML de `POST /` ejecuta la misma extracción y devuelve la página
+completa con los resultados; no requiere JavaScript. `/extract` se conserva
+para el flujo asíncrono del navegador y para integraciones JSON. Los dos aceptan
+las mismas entradas y límites de tamaño.
+
 ### `POST /shorten`
 
-Solo existe si `SHORT_IO_API_KEY` y `SHORT_IO_DOMAIN` están definidas; si no,
+Está disponible si `SHORT_IO_API_KEY` y `SHORT_IO_DOMAIN` están definidas; si no,
 responde `503`.
 
 ```bash
 curl -sX POST http://localhost:5000/shorten \
   -H 'Content-Type: application/json' \
-  -d '{"url": "<URL salida de /extract>"}'
+  -d '{"url":"<URL>","slug":"<slug>","title":"<título>","ts":<timestamp>,"sig":"<firma>"}'
+```
+
+Usa el bloque firmado `shorten` que acompaña a cada stream en la respuesta de
+`/extract`; el endpoint rechaza los campos ausentes o mal tipados y no acepta
+destinos que no haya emitido la app.
+
+```bash
+curl -sX POST http://localhost:5000/extract \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"admiralbulldog"}' \
+  | jq -c '.streams[0] as $s | {url:$s.url} + $s.shorten' \
+  | curl -sX POST http://localhost:5000/shorten \
+      -H 'Content-Type: application/json' --data-binary @-
 ```
 
 ```json
@@ -506,26 +564,64 @@ superar 20 peticiones por minuto desde la misma IP.
 ## Estructura del proyecto
 
 ```
-├── app.py                     Rutas Flask, saneado de errores, URL del sitio
-├── twitch_extractor.py        Token, manifiesto y parseo de calidades
-├── shortener.py               Acortado con short.io, caché anti-abuso, límite
-├── templates/index.html       Interfaz y meta tags (OG, JSON-LD, favicons)
+├── app.py                     App factory y registro de blueprints
+├── config.py                  Configuración por entorno y valores por defecto
+├── twitch/
+│   ├── urls.py                Validación de canales, VODs y URLs
+│   ├── client.py              GraphQL, tokens y URL de Usher
+│   ├── manifest.py            Parseo HLS y orden de calidades
+│   ├── extraction.py          Flujo de extracción
+│   └── errors.py              Errores del adaptador Twitch
+├── twitch_extractor.py        Fachada compatible para imports existentes
+├── shortener.py               Servicio short.io, firma y rate limit
+├── routes/
+│   ├── pages.py               Formulario HTML SSR
+│   └── api.py                 API JSON de extracción y acortado
+├── services/extraction.py     Orquestación de la extracción
+├── web/errors.py              Saneado de errores públicos
+├── templates/index.html       Interfaz SSR y meta tags
+├── tests/                     Pruebas unitarias de rutas, extractor y firma
 ├── static/
-│   ├── script.js              Lógica de la interfaz (módulo ES)
+│   ├── script.js              Entrada del módulo ES
+│   ├── js/
+│   │   ├── main.js            Eventos y coordinación de la interfaz
+│   │   ├── api.js             Peticiones JSON
+│   │   ├── render.js          Presentación de resultados
+│   │   └── clipboard.js       Portapapeles y feedback accesible
 │   ├── icons.js               Los 2 SVG de react-icons usados
 │   ├── styles.css
+│   ├── tailwind.css           Entrada del compilador (solo desarrollo)
+│   ├── tailwind.generated.css ← CSS compilado, servido sin CDN ni JS
 │   ├── site.webmanifest       ← generado
 │   ├── robots.txt             ← generado
 │   └── iconos y og-image      ← generados
+├── package.json               Dependencias de build del CSS
+├── package-lock.json          Versiones bloqueadas para Node
 ├── assets/
 │   ├── icon.svg               ★ Fuente de verdad de la marca
 │   └── og.svg                 Plantilla de la imagen social
 ├── tools/generate-assets.sh   Generador (make icons)
 ├── Dockerfile
+├── .dockerignore              Excluye secretos y archivos locales del build
 ├── docker-compose.yml         Desarrollo
+├── docker-compose.production.yml  Producción con Gunicorn
 ├── entrypoint.sh              Gunicorn
+├── .github/workflows/test.yml Pruebas y consistencia de assets
 └── Makefile
 ```
+
+### Pruebas
+
+Con las dependencias instaladas, ejecuta:
+
+```bash
+python -m unittest discover -v
+```
+
+Las pruebas usan el cliente de Flask y simulan las llamadas de red; no requieren
+credenciales de Twitch ni de short.io.
+La CI también recompila el CSS y comprueba que el bundle generado esté
+actualizado.
 
 ---
 

@@ -7,17 +7,18 @@ RUN adduser --disabled-password --gecos '' appuser
 
 WORKDIR /app
 
-# 1. Copia requirements primero (para caché eficiente)
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 2. ¡Copia TODO el código, incluido entrypoint.sh!
-COPY . .
-
-# 3. Ahora sí puedes dar permisos y cambiar propietario
-RUN chmod +x /app/entrypoint.sh && \
-    chown -R appuser:appuser /app
+COPY --chown=appuser:appuser app.py config.py twitch_extractor.py shortener.py ./
+COPY --chown=appuser:appuser twitch ./twitch
+COPY --chown=appuser:appuser routes ./routes
+COPY --chown=appuser:appuser services ./services
+COPY --chown=appuser:appuser web ./web
+COPY --chown=appuser:appuser templates ./templates
+COPY --chown=appuser:appuser static ./static
+COPY --chown=appuser:appuser entrypoint.sh ./entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 USER appuser
 

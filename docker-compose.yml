@@ -18,6 +18,7 @@ services:
       SHORT_IO_API_KEY: "${SHORT_IO_API_KEY:-}"
       SHORT_IO_DOMAIN: "${SHORT_IO_DOMAIN:-}"
       WORKERS: "${WORKERS:-4}"
+      MAX_CONTENT_LENGTH: "${MAX_CONTENT_LENGTH:-16384}"
     command: python app.py
     networks:
       - npm_network
@@ -26,4 +27,3 @@ networks:
   npm_network:
     external: true
     name: npm_network
-

@@ -1,6 +1,6 @@
 # Makefile
 
-.PHONY: help build run dev stop clean logs ps icons
+.PHONY: help build run dev stop clean logs ps icons test
 
 help:
 	@echo "Twitch Stream Extractor - Comandos disponibles:"
@@ -12,6 +12,7 @@ help:
 	@echo "  logs     - Muestra logs del contenedor"
 	@echo "  ps       - Estado de los contenedores y si la app responde"
 	@echo "  icons    - Regenera PNG/ICO/manifest desde assets/*.svg"
+	@echo "  test     - Ejecuta las pruebas unitarias"
 	@echo ""
 	@echo "Para cambiar la marca: edita assets/icon.svg y ejecuta 'make icons'."
 
@@ -108,3 +109,6 @@ ps:
 # rsvg-convert ni fuentes, así que el render se hace en el host.
 icons:
 	./tools/generate-assets.sh
+
+test:
+	python3 -m unittest discover -v

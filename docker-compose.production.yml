@@ -1,0 +1,14 @@
+services:
+  twitch-extractor:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_DEBUG: "0"
+      PORT: "5000"
+      WORKERS: "${WORKERS:-4}"
+      MAX_CONTENT_LENGTH: "${MAX_CONTENT_LENGTH:-16384}"
+      PUBLIC_URL: "${PUBLIC_URL:-}"
+      SHORT_IO_API_KEY: "${SHORT_IO_API_KEY:-}"
+      SHORT_IO_DOMAIN: "${SHORT_IO_DOMAIN:-}"
